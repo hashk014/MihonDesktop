@@ -1111,22 +1111,29 @@ mod tests {
         assert!(describe_incompatible_index("https://x/index.json", ours).is_none());
     }
 
-    /// The exact url a Mihon user is most likely to paste.
+    /// The exact urls a Mihon user is most likely to paste. Both are live, so
+    /// this also catches keiyoushi changing what those paths serve.
     #[test]
     #[ignore]
     fn live_android_repo_is_refused_clearly() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
             let http = HttpClient::new().unwrap();
-            let err = fetch_repo(
-                &http,
+            for url in [
+                // The current index: protobuf, served gzipped.
                 "https://github.com/keiyoushi/extensions/raw/repo/index.pb",
-            )
-            .await
-            .expect_err("an Android repository must be refused");
-            let message = format!("{err:#}");
-            println!("refused with: {message}");
-            assert!(message.contains("Android"), "unhelpful: {message}");
+                // The legacy path. It answers 200 with a two-entry stub whose
+                // only purpose is to tell outdated clients to update, so the
+                // apk detection is what has to catch it, not a 404.
+                "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
+            ] {
+                let err = fetch_repo(&http, url)
+                    .await
+                    .expect_err("an Android repository must be refused");
+                let message = format!("{err:#}");
+                println!("{url}\n  refused with: {message}");
+                assert!(message.contains("Android"), "unhelpful: {message}");
+            }
         });
     }
 
