@@ -16,7 +16,8 @@ cargo run --release
 ```
 
 Prebuilt Windows binaries are attached to each
-[release](https://github.com/hashk014/MihonDesktop/releases).
+[release](https://github.com/hashk014/MihonDesktop/releases); what changed in
+each one is in [CHANGELOG.md](CHANGELOG.md).
 
 ## What it does
 
