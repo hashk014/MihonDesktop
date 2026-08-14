@@ -1,0 +1,6 @@
+# Keep the repository on LF, whatever the contributor's platform does locally.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.cbz binary

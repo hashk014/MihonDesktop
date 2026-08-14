@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build and publish
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    name: Windows binary
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if (-not $tag) { $tag = "${{ github.ref_name }}" }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/mihon-desktop.exe dist/
+          Copy-Item README.md, LICENSE, NOTICE dist/
+          Copy-Item -Recurse examples dist/examples
+          Compress-Archive -Path dist/* -DestinationPath "mihon-desktop-$tag-windows-x86_64.zip"
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mihon-desktop-*-windows-x86_64.zip
+          generate_release_notes: true
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}

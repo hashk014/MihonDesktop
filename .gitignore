@@ -1,0 +1,13 @@
+# Build artifacts
+/target
+
+# Local editor and OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Screenshots produced by the capture harness
+/screenshots
+*.part

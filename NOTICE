@@ -1,0 +1,39 @@
+Mihon Desktop
+Copyright 2026 the Mihon Desktop contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------------
+Attribution
+------------------------------------------------------------------------------
+
+This project is an independent reimplementation, in Rust, of the Mihon manga
+reader for Android. It shares no code with it, but follows its feature set,
+information architecture, and data model closely, and was written by reading
+the upstream sources.
+
+  Mihon — https://github.com/mihonapp/mihon
+  Licensed under the Apache License, Version 2.0.
+
+The built-in AnimeSama source (src/source/animesama.rs) is a port of the
+Kotlin extension of the same name. Its request flow, selectors, and the way it
+reconstructs a chapter list from the site's inline JavaScript were derived from
+that implementation.
+
+  keiyoushi/extensions-source — https://github.com/keiyoushi/extensions-source
+  src/fr/animesama, licensed under the Apache License, Version 2.0.
+
+Neither project is affiliated with, nor endorses, this one.
+
+------------------------------------------------------------------------------
+Third-party runtime dependencies
+------------------------------------------------------------------------------
+
+The binary links a number of Rust crates, each under its own permissive
+licence (MIT, Apache-2.0, or both). Run `cargo tree` for the full list, or
+`cargo about`/`cargo deny` to generate a licence report.
+
+On startup the application may load font files installed on the system (for
+example Yu Gothic, Malgun Gothic, Microsoft YaHei or Segoe UI Symbol on
+Windows) so that non-Latin titles render. Those fonts are read from their
+installed location and are neither bundled nor redistributed.

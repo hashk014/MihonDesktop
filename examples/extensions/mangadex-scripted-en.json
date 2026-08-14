@@ -1,0 +1,193 @@
+{
+  "id": "mangadex-scripted-en",
+  "name": "MangaDex (scripted)",
+  "lang": "en",
+  "baseUrl": "https://api.mangadex.org",
+  "version": 1,
+  "author": "Mihon Desktop example",
+  "description": "The same catalogue as the built-in MangaDex source, expressed entirely as a JSON extension. Useful as a reference for the scripted extension format.",
+  "pageSize": 24,
+  "rateLimit": { "permits": 4, "periodMs": 1000 },
+
+  "popular": {
+    "url": "{base}/manga?limit={limit}&offset={offset}&includes[]=cover_art&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&availableTranslatedLanguage[]=en&hasAvailableChapters=true",
+    "json": true,
+    "list": {
+      "item": "/data",
+      "title": {
+        "selector": "/attributes/title/en",
+        "alternatives": [
+          { "selector": "/attributes/title", "firstValue": true },
+          { "selector": "/attributes/altTitles/0", "firstValue": true }
+        ],
+        "default": "Untitled"
+      },
+      "url": { "selector": "/id", "prefix": "/manga/" },
+      "thumbnail": {
+        "format": "https://uploads.mangadex.org/covers/{0}/{1}.512.jpg",
+        "parts": [
+          { "selector": "/id" },
+          {
+            "selector": "/relationships",
+            "find": "/type",
+            "equals": "cover_art",
+            "then": "/attributes/fileName"
+          }
+        ]
+      }
+    },
+    "nextPage": "/total"
+  },
+
+  "latest": {
+    "url": "{base}/manga?limit={limit}&offset={offset}&includes[]=cover_art&order[latestUploadedChapter]=desc&contentRating[]=safe&contentRating[]=suggestive&availableTranslatedLanguage[]=en&hasAvailableChapters=true",
+    "json": true,
+    "list": {
+      "item": "/data",
+      "title": {
+        "selector": "/attributes/title/en",
+        "alternatives": [
+          { "selector": "/attributes/title", "firstValue": true },
+          { "selector": "/attributes/altTitles/0", "firstValue": true }
+        ],
+        "default": "Untitled"
+      },
+      "url": { "selector": "/id", "prefix": "/manga/" },
+      "thumbnail": {
+        "format": "https://uploads.mangadex.org/covers/{0}/{1}.512.jpg",
+        "parts": [
+          { "selector": "/id" },
+          {
+            "selector": "/relationships",
+            "find": "/type",
+            "equals": "cover_art",
+            "then": "/attributes/fileName"
+          }
+        ]
+      }
+    },
+    "nextPage": "/total"
+  },
+
+  "search": {
+    "url": "{base}/manga?limit={limit}&offset={offset}&title={query}&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&availableTranslatedLanguage[]=en{filters}",
+    "json": true,
+    "list": {
+      "item": "/data",
+      "title": {
+        "selector": "/attributes/title/en",
+        "alternatives": [
+          { "selector": "/attributes/title", "firstValue": true },
+          { "selector": "/attributes/altTitles/0", "firstValue": true }
+        ],
+        "default": "Untitled"
+      },
+      "url": { "selector": "/id", "prefix": "/manga/" },
+      "thumbnail": {
+        "format": "https://uploads.mangadex.org/covers/{0}/{1}.512.jpg",
+        "parts": [
+          { "selector": "/id" },
+          {
+            "selector": "/relationships",
+            "find": "/type",
+            "equals": "cover_art",
+            "then": "/attributes/fileName"
+          }
+        ]
+      }
+    },
+    "nextPage": "/total"
+  },
+
+  "details": {
+    "url": "{base}/manga/{id}?includes[]=cover_art&includes[]=author&includes[]=artist",
+    "json": true,
+    "root": "/data",
+    "fields": {
+      "title": {
+        "selector": "/attributes/title/en",
+        "alternatives": [
+          { "selector": "/attributes/title", "firstValue": true },
+          { "selector": "/attributes/altTitles/0", "firstValue": true }
+        ],
+        "default": "Untitled"
+      },
+      "description": { "selector": "/attributes/description/en" },
+      "author": {
+        "selector": "/relationships",
+        "find": "/type",
+        "equals": "author",
+        "then": "/attributes/name"
+      },
+      "artist": {
+        "selector": "/relationships",
+        "find": "/type",
+        "equals": "artist",
+        "then": "/attributes/name"
+      },
+      "genre": { "selector": "/attributes/tags", "all": true, "then": "/attributes/name/en" },
+      "status": {
+        "selector": "/attributes/status",
+        "map": {
+          "ongoing": "Ongoing",
+          "completed": "Completed",
+          "hiatus": "Hiatus",
+          "cancelled": "Cancelled"
+        }
+      },
+      "thumbnail": {
+        "format": "https://uploads.mangadex.org/covers/{0}/{1}.512.jpg",
+        "parts": [
+          { "selector": "/id" },
+          {
+            "selector": "/relationships",
+            "find": "/type",
+            "equals": "cover_art",
+            "then": "/attributes/fileName"
+          }
+        ]
+      }
+    }
+  },
+
+  "chapters": {
+    "url": "{base}/manga/{id}/feed?limit=500&translatedLanguage[]=en&includes[]=scanlation_group&order[chapter]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica",
+    "json": true,
+    "list": {
+      "item": "/data",
+      "name": {
+        "format": "Ch.{0}{1}",
+        "parts": [
+          { "selector": "/attributes/chapter", "default": "?" },
+          { "selector": "/attributes/title", "prefix": " - ", "default": "" }
+        ]
+      },
+      "url": { "selector": "/id", "prefix": "/chapter/" },
+      "number": { "selector": "/attributes/chapter" },
+      "skipIf": { "selector": "/attributes/externalUrl" },
+      "date": { "selector": "/attributes/publishAt" },
+      "scanlator": {
+        "selector": "/relationships",
+        "find": "/type",
+        "equals": "scanlation_group",
+        "then": "/attributes/name"
+      }
+    }
+  },
+
+  "pages": {
+    "url": "{base}/at-home/server/{id}",
+    "json": true,
+    "list": {
+      "item": "/chapter/data",
+      "image": {
+        "format": "{0}/data/{1}/{2}",
+        "parts": [
+          { "fromRoot": true, "selector": "/baseUrl" },
+          { "fromRoot": true, "selector": "/chapter/hash" },
+          {}
+        ]
+      }
+    }
+  }
+}
