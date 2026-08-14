@@ -13,7 +13,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
 
     egui::Panel::top("browse_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Browse").size(20.0).strong());
@@ -60,7 +60,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| match app.browse.tab {
             BrowseTab::Sources => {
                 if app.browse.results.is_empty() {
@@ -155,11 +155,8 @@ fn source_row(app: &mut App, ui: &mut Ui, source_id: Id, name: &str, lang: &str)
                 let (rect, _) = ui.allocate_exact_size(vec2(34.0, 34.0), egui::Sense::hover());
                 let hue = (source_id.unsigned_abs() % 360) as f32;
                 let colour = egui::ecolor::Hsva::new(hue / 360.0, 0.45, 0.65, 1.0);
-                ui.painter().rect_filled(
-                    rect,
-                    egui::CornerRadius::same(super::theme::RADIUS_SMALL),
-                    Color32::from(colour),
-                );
+                ui.painter()
+                    .rect_filled(rect, palette.corner_small(), Color32::from(colour));
                 ui.painter().text(
                     rect.center(),
                     egui::Align2::CENTER_CENTER,

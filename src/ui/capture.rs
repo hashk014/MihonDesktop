@@ -121,10 +121,64 @@ pub fn tick(app: &mut App, ctx: &egui::Context) {
 /// Applies `MIHON_SCREENSHOT_THEME=light|dark`, so both palettes can be
 /// checked without touching the user's saved preferences.
 fn apply_theme_override(app: &mut App) {
+    use crate::prefs::{AppTheme, CardStyle, Density, NavStyle};
+
     match std::env::var("MIHON_SCREENSHOT_THEME").as_deref() {
         Ok("light") => app.prefs.theme_mode = crate::prefs::ThemeMode::Light,
         Ok("dark") => app.prefs.theme_mode = crate::prefs::ThemeMode::Dark,
+        Ok("system") => app.prefs.theme_mode = crate::prefs::ThemeMode::System,
         _ => {}
+    }
+
+    // Every appearance knob is overridable, so each combination can be looked
+    // at without editing the saved preferences of whoever is running this.
+    if let Ok(value) = std::env::var("MIHON_SCREENSHOT_NAV") {
+        app.prefs.nav_style = match value.as_str() {
+            "compact" => NavStyle::Compact,
+            "bottom" => NavStyle::Bottom,
+            _ => NavStyle::Rail,
+        };
+    }
+    if let Ok(value) = std::env::var("MIHON_SCREENSHOT_DENSITY") {
+        app.prefs.density = match value.as_str() {
+            "compact" => Density::Compact,
+            "comfortable" => Density::Comfortable,
+            _ => Density::Cozy,
+        };
+    }
+    if let Ok(value) = std::env::var("MIHON_SCREENSHOT_CARD") {
+        app.prefs.card_style = match value.as_str() {
+            "outlined" => CardStyle::Outlined,
+            "elevated" => CardStyle::Elevated,
+            _ => CardStyle::Flat,
+        };
+    }
+    if let Ok(value) = std::env::var("MIHON_SCREENSHOT_ACCENT") {
+        // Matched on letters alone, so "Teal & Turquoise", "teal-turquoise"
+        // and "Tealturquoise" all name the same theme.
+        let normalise = |s: &str| {
+            s.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .map(|c| c.to_ascii_lowercase())
+                .collect::<String>()
+        };
+        let wanted = normalise(&value);
+        match AppTheme::ALL
+            .iter()
+            .find(|t| normalise(t.label()) == wanted)
+        {
+            Some(theme) => app.prefs.app_theme = *theme,
+            None => log::warn!("capture: no theme called {value:?}"),
+        }
+    }
+    if let Ok(Ok(value)) = std::env::var("MIHON_SCREENSHOT_TINT").map(|v| v.parse()) {
+        app.prefs.theme_tint = value;
+    }
+    if let Ok(Ok(value)) = std::env::var("MIHON_SCREENSHOT_RADIUS").map(|v| v.parse()) {
+        app.prefs.corner_radius = value;
+    }
+    if std::env::var("MIHON_SCREENSHOT_PURE_BLACK").is_ok() {
+        app.prefs.pure_black = true;
     }
 
     // `MIHON_SCREENSHOT_MODE` forces a reading mode, so both the paged and the

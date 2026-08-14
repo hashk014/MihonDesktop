@@ -12,7 +12,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let paused = app.core.downloads.is_paused();
 
     egui::Panel::top("downloads_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(
                 app,
@@ -54,7 +54,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             if queue.is_empty() {
                 widgets::empty_state(

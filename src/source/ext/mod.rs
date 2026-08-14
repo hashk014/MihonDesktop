@@ -896,10 +896,14 @@ pub async fn fetch_repo(http: &HttpClient, repo_url: &str) -> Result<Vec<RepoEnt
 /// Anyone arriving from Mihon will paste an Android extension repository first,
 /// and "expected value at line 1" would tell them nothing.
 fn describe_incompatible_index(url: &str, bytes: &[u8]) -> Option<String> {
-    const ANDROID_REPO: &str = "This is a Mihon/Tachiyomi repository for Android extensions. \
-         Those are compiled Android apps (.apk) and cannot run in a desktop build. \
-         Use a scripted extension (a .json manifest) instead — see the example in the \
-         app's extensions folder.";
+    // Naming the runtime matters: anyone who has seen Tachimanga or Suwayomi
+    // run these on a phone or a desktop will otherwise assume this is a
+    // missing feature rather than a missing virtual machine.
+    const ANDROID_REPO: &str = "This repository holds Mihon/Tachiyomi extensions, which are \
+         compiled Kotlin (.apk / .jar) and need a Java virtual machine to run — that is how \
+         Tachimanga and Suwayomi load them. This app is a single native binary with no JVM, \
+         so it cannot execute them. Use a scripted extension (a .json manifest) instead — \
+         see the example in the app's extensions folder.";
 
     let path = url.split(['?', '#']).next().unwrap_or(url);
     if path.ends_with(".pb") || path.ends_with(".pb.gz") {
@@ -909,10 +913,13 @@ fn describe_incompatible_index(url: &str, bytes: &[u8]) -> Option<String> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
         return Some(ANDROID_REPO.to_string());
     }
-    // The JSON variant parses, but every entry describes an apk.
-    if let Ok(text) = std::str::from_utf8(bytes)
-        && let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(text)
-    {
+
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return None;
+    };
+
+    // The legacy flat array, whose entries each describe an apk.
+    if let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(text) {
         let android = values.iter().take(5).any(|entry| {
             entry.get("apk").is_some()
                 || entry
@@ -925,6 +932,22 @@ fn describe_incompatible_index(url: &str, bytes: &[u8]) -> Option<String> {
             return Some(ANDROID_REPO.to_string());
         }
     }
+
+    // The current format is an object: `{name, signingKey, extensionList:
+    // {extensions: [{packageName, resources: {apkUrl, jarUrl}, …}]}}`. This is
+    // what `index.json` serves, and it is the one people reach for now that
+    // `index.min.json` has been reduced to an "update your app" stub.
+    if let Ok(object) = serde_json::from_str::<serde_json::Value>(text) {
+        let looks_android = object.get("extensionList").is_some()
+            || object.get("signingKey").is_some()
+            || object
+                .pointer("/extensionList/extensions/0/resources/apkUrl")
+                .is_some();
+        if looks_android {
+            return Some(ANDROID_REPO.to_string());
+        }
+    }
+
     None
 }
 
@@ -1084,7 +1107,10 @@ mod tests {
     fn android_repositories_are_recognised_and_explained() {
         let expect_android = |reason: Option<String>| {
             let reason = reason.expect("should be recognised as an Android repository");
-            assert!(reason.contains("Android"), "unhelpful message: {reason}");
+            assert!(
+                reason.contains("Java virtual machine"),
+                "the message must name what is actually missing: {reason}"
+            );
             assert!(reason.contains(".json"), "should point at the alternative");
         };
 
@@ -1106,6 +1132,21 @@ mod tests {
             mihon_json,
         ));
 
+        // The current object format, which `index.json` serves.
+        let keiyoushi = br#"{
+            "name": "Keiyoushi",
+            "signingKey": "deadbeef",
+            "extensionList": {"extensions": [{
+                "name": "AnimeSama",
+                "packageName": "eu.kanade.tachiyomi.extension.fr.animesama",
+                "resources": {"apkUrl": "https://x/a.apk", "jarUrl": "https://x/a.jar"}
+            }]}
+        }"#;
+        expect_android(describe_incompatible_index(
+            "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.json",
+            keiyoushi,
+        ));
+
         // A genuine scripted index must pass through untouched.
         let ours = br#"[{"id":"demo","name":"Demo","lang":"en","url":"https://x/demo.json"}]"#;
         assert!(describe_incompatible_index("https://x/index.json", ours).is_none());
@@ -1120,19 +1161,24 @@ mod tests {
         runtime.block_on(async {
             let http = HttpClient::new().unwrap();
             for url in [
-                // The current index: protobuf, served gzipped.
+                // The protobuf index, served gzipped.
                 "https://github.com/keiyoushi/extensions/raw/repo/index.pb",
                 // The legacy path. It answers 200 with a two-entry stub whose
                 // only purpose is to tell outdated clients to update, so the
                 // apk detection is what has to catch it, not a 404.
                 "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
+                // The full list, in the object format clients read today.
+                "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.json",
             ] {
                 let err = fetch_repo(&http, url)
                     .await
                     .expect_err("an Android repository must be refused");
                 let message = format!("{err:#}");
                 println!("{url}\n  refused with: {message}");
-                assert!(message.contains("Android"), "unhelpful: {message}");
+                assert!(
+                    message.contains("Java virtual machine"),
+                    "unhelpful: {message}"
+                );
             }
         });
     }

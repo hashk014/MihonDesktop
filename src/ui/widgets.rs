@@ -1,11 +1,10 @@
 //! Reusable pieces of the interface: covers, badges, headers, dialogs.
 
 use egui::{
-    Align, Color32, CornerRadius, Layout, Rect, Response, RichText, Sense, Stroke, TextStyle, Ui,
-    pos2, vec2,
+    Align, Color32, Layout, Rect, Response, RichText, Sense, Stroke, TextStyle, Ui, pos2, vec2,
 };
 
-use super::theme::{self, Palette, RADIUS, RADIUS_SMALL};
+use super::theme::{self, Palette};
 use super::{App, Dialog};
 use crate::images::ImageKind;
 use crate::model::{Id, TriState};
@@ -17,30 +16,32 @@ pub const COVER_ASPECT: f32 = 1.5;
 // Navigation rail
 // ---------------------------------------------------------------------------
 
+/// One entry of the navigation, in whichever shape the user picked.
+///
+/// The selected entry is *not* filled here: the moving pill behind it is
+/// painted once by the rail, so it can slide between entries instead of
+/// blinking from one to the next.
+/// `size` is passed in rather than taken from `ui.available_width()`: inside a
+/// horizontal bar that would give the first entry the entire row.
 pub fn nav_item(
     ui: &mut Ui,
     palette: &Palette,
     glyph: &str,
     label: &str,
     selected: bool,
+    style: NavItemStyle,
+    size: egui::Vec2,
 ) -> Response {
-    let size = vec2(ui.available_width(), 52.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         let hovered = response.hovered();
 
-        if selected {
+        if hovered && !selected {
             painter.rect_filled(
                 rect.shrink2(vec2(4.0, 2.0)),
-                CornerRadius::same(RADIUS),
-                palette.accent.gamma_multiply(0.22),
-            );
-        } else if hovered {
-            painter.rect_filled(
-                rect.shrink2(vec2(4.0, 2.0)),
-                CornerRadius::same(RADIUS),
+                palette.corner(),
                 palette.surface_alt,
             );
         }
@@ -53,23 +54,100 @@ pub fn nav_item(
             palette.text_dim
         };
 
-        painter.text(
-            pos2(rect.center().x, rect.top() + 16.0),
-            egui::Align2::CENTER_CENTER,
-            glyph,
-            egui::FontId::proportional(17.0),
-            colour,
-        );
-        painter.text(
-            pos2(rect.center().x, rect.bottom() - 12.0),
-            egui::Align2::CENTER_CENTER,
-            label,
-            egui::FontId::proportional(10.5),
-            colour,
-        );
+        match style {
+            NavItemStyle::Full => {
+                painter.text(
+                    pos2(rect.center().x, rect.top() + rect.height() * 0.32),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(17.0),
+                    colour,
+                );
+                painter.text(
+                    pos2(rect.center().x, rect.bottom() - rect.height() * 0.23),
+                    egui::Align2::CENTER_CENTER,
+                    label,
+                    egui::FontId::proportional(10.5),
+                    colour,
+                );
+            }
+            NavItemStyle::IconOnly => {
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(18.0),
+                    colour,
+                );
+            }
+            NavItemStyle::Horizontal => {
+                // The label sits beside the glyph so the bar stays shallow.
+                let galley = painter.layout_no_wrap(
+                    label.to_string(),
+                    egui::FontId::proportional(11.5),
+                    colour,
+                );
+                let glyph_width = 20.0;
+                let total = glyph_width + 4.0 + galley.size().x;
+                let left = rect.center().x - total / 2.0;
+                painter.text(
+                    pos2(left + glyph_width / 2.0, rect.center().y),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(15.0),
+                    colour,
+                );
+                painter.galley(
+                    pos2(
+                        left + glyph_width + 4.0,
+                        rect.center().y - galley.size().y / 2.0,
+                    ),
+                    galley,
+                    colour,
+                );
+            }
+        }
     }
 
     response.on_hover_text(label)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavItemStyle {
+    /// Glyph above a label.
+    Full,
+    /// Glyph alone.
+    IconOnly,
+    /// Glyph beside a label.
+    Horizontal,
+}
+
+/// The accent pill that marks the selected navigation entry.
+///
+/// Animating one rectangle rather than fading two of them in and out is what
+/// makes the movement read as a single indicator travelling; it costs two
+/// interpolated values per axis and egui asks for the repaints itself.
+///
+/// Returns a shape instead of painting, because the pill has to sit *behind*
+/// entries whose rectangles are only known once they have been laid out. The
+/// caller reserves a slot with `Shape::Noop` first and fills it afterwards.
+pub fn nav_indicator_shape(ui: &Ui, palette: &Palette, target: Rect, animate: bool) -> egui::Shape {
+    let id = ui.id().with("nav_indicator");
+    let rect = if animate {
+        let time = ui.style().animation_time.max(0.12);
+        let value = |suffix: &str, target: f32| {
+            ui.ctx()
+                .animate_value_with_time(id.with(suffix), target, time)
+        };
+        Rect::from_min_max(
+            pos2(value("x0", target.left()), value("y0", target.top())),
+            pos2(value("x1", target.right()), value("y1", target.bottom())),
+        )
+    } else {
+        target
+    };
+
+    egui::Shape::rect_filled(rect, palette.corner(), palette.accent.gamma_multiply(0.22))
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +192,7 @@ pub fn search_field(ui: &mut Ui, palette: &Palette, hint: &str, text: &mut Strin
     let width = ui.available_width().min(340.0);
     egui::Frame::NONE
         .fill(palette.surface_alt)
-        .corner_radius(CornerRadius::same(RADIUS))
+        .corner_radius(palette.corner())
         .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
             ui.set_width(width);
@@ -137,10 +215,14 @@ pub fn search_field(ui: &mut Ui, palette: &Palette, hint: &str, text: &mut Strin
 }
 
 /// Small coloured label used for unread / downloaded counters.
+///
+/// Reads its rounding from the live style rather than a palette: badges are
+/// painted from a dozen call sites that have no reason to carry one around.
 pub fn badge(ui: &mut Ui, text: &str, fill: Color32, text_colour: Color32) {
+    let corner = theme::small_corner(ui);
     egui::Frame::NONE
         .fill(fill)
-        .corner_radius(CornerRadius::same(RADIUS_SMALL))
+        .corner_radius(corner)
         .inner_margin(egui::Margin::symmetric(5, 1))
         .show(ui, |ui| {
             ui.label(RichText::new(text).size(11.0).color(text_colour).strong());
@@ -150,7 +232,7 @@ pub fn badge(ui: &mut Ui, text: &str, fill: Color32, text_colour: Color32) {
 pub fn chip(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
     let response = egui::Frame::NONE
         .fill(palette.surface_alt)
-        .corner_radius(CornerRadius::same(RADIUS_SMALL))
+        .corner_radius(palette.corner_small())
         .inner_margin(egui::Margin::symmetric(8, 3))
         .show(ui, |ui| {
             ui.label(RichText::new(text).size(12.0).color(palette.text_dim));
@@ -169,7 +251,7 @@ pub fn segmented(
     let mut clicked = None;
     egui::Frame::NONE
         .fill(palette.surface)
-        .corner_radius(CornerRadius::same(RADIUS))
+        .corner_radius(palette.corner())
         .inner_margin(egui::Margin::same(3))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -186,7 +268,7 @@ pub fn segmented(
                         } else {
                             Color32::TRANSPARENT
                         })
-                        .corner_radius(CornerRadius::same(RADIUS_SMALL));
+                        .corner_radius(palette.corner_small());
 
                     if ui.add(button).clicked() && !is_selected {
                         clicked = Some(index);
@@ -261,7 +343,7 @@ pub fn error_box(ui: &mut Ui, palette: &Palette, message: &str) {
     egui::Frame::NONE
         .fill(palette.error.gamma_multiply(0.15))
         .stroke(Stroke::new(1.0, palette.error.gamma_multiply(0.5)))
-        .corner_radius(CornerRadius::same(RADIUS))
+        .corner_radius(palette.corner())
         .inner_margin(egui::Margin::same(10))
         .show(ui, |ui| {
             ui.label(RichText::new(message).color(palette.error).size(12.5));
@@ -282,7 +364,7 @@ pub fn paint_cover(
     title: &str,
 ) {
     let palette = app.palette;
-    let corner = CornerRadius::same(RADIUS);
+    let corner = palette.corner();
 
     let texture = url.and_then(|url| {
         let headers = app.source_headers(source_id);
@@ -383,11 +465,7 @@ pub fn cover_tile(
 
     // Dim entries already in the library when browsing a source.
     if in_library {
-        painter.rect_filled(
-            cover_rect,
-            CornerRadius::same(RADIUS),
-            Color32::from_black_alpha(120),
-        );
+        painter.rect_filled(cover_rect, palette.corner(), Color32::from_black_alpha(120));
         painter.text(
             cover_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -422,7 +500,7 @@ pub fn cover_tile(
             pos2(x, cover_rect.top() + 4.0),
             vec2(galley.size().x + 10.0, 16.0),
         );
-        painter.rect_filled(badge_rect, CornerRadius::same(4), *colour);
+        painter.rect_filled(badge_rect, palette.corner_small(), *colour);
         painter.galley(
             pos2(badge_rect.left() + 5.0, badge_rect.top() + 2.0),
             galley,
@@ -434,19 +512,19 @@ pub fn cover_tile(
     if selected {
         painter.rect_stroke(
             cover_rect,
-            CornerRadius::same(RADIUS),
+            palette.corner(),
             Stroke::new(3.0, palette.accent),
             egui::StrokeKind::Inside,
         );
         painter.rect_filled(
             cover_rect,
-            CornerRadius::same(RADIUS),
+            palette.corner(),
             palette.accent.gamma_multiply(0.25),
         );
     } else if response.hovered() {
         painter.rect_stroke(
             cover_rect,
-            CornerRadius::same(RADIUS),
+            palette.corner(),
             Stroke::new(2.0, palette.accent.gamma_multiply(0.8)),
             egui::StrokeKind::Inside,
         );
@@ -483,7 +561,7 @@ pub fn dialogs(app: &mut App, ctx: &egui::Context) {
 
     let frame = egui::Frame::NONE
         .fill(palette.elevated)
-        .corner_radius(CornerRadius::same(theme::RADIUS_LARGE))
+        .corner_radius(palette.corner_large())
         .inner_margin(egui::Margin::same(18))
         .stroke(Stroke::new(1.0, palette.outline));
 

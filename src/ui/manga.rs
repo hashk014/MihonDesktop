@@ -12,7 +12,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
     let Some(manga) = app.details.manga.clone() else {
         egui::Panel::top("manga_top")
-            .frame(super::theme::plain(14))
+            .frame(super::theme::header_frame(&app.palette))
             .show(ui, |ui| {
                 widgets::screen_header(app, ui, "Loading…", None);
             });
@@ -23,7 +23,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     };
 
     egui::Panel::top("manga_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(app, ui, "Details", None);
         });

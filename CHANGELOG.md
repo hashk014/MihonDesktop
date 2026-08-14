@@ -4,6 +4,24 @@ All notable changes are recorded here. Versions follow [semantic versioning](htt
 
 ## [Unreleased]
 
+### Added
+- Appearance settings rebuilt around one palette, with a live preview that
+  redraws as you drag: System theme following the desktop, eleven accent
+  palettes plus a colour picker, an accent-bleed slider that tints backgrounds
+  and cards, pure-black backgrounds, corner rounding from square to pill, flat
+  / outlined / elevated cards, three navigation layouts (rail, icon-only rail,
+  bottom bar), three densities, an independent text-size slider, an animation
+  toggle, and a reset button.
+- The navigation's selected entry is marked by a pill that slides between
+  entries instead of jumping.
+- Every appearance setting is overridable from the screenshot harness, so each
+  combination can be inspected without touching saved preferences.
+
+### Changed
+- Mihon/Tachiyomi repositories are now recognised in their current object
+  format (`index.json`), not only the legacy array, and the refusal explains
+  that these extensions need a JVM rather than implying the format is unknown.
+
 ## [0.1.0] — 2026-08-14
 
 First public build.

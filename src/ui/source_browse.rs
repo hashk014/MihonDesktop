@@ -30,7 +30,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     // -- toolbar ------------------------------------------------------------
     egui::Panel::top("source_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(app, ui, &source_name, Some(&source_lang));
             ui.add_space(8.0);
@@ -124,7 +124,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     // -- results ------------------------------------------------------------
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             if let Some(error) = app.source_browse.error.clone() {
                 widgets::error_box(ui, &palette, &error);

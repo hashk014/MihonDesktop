@@ -83,9 +83,34 @@ pub enum ThemeMode {
     Light,
     #[default]
     Dark,
+    /// Follow whatever the desktop reports.
+    System,
 }
 
-/// The named palettes Mihon ships with.
+impl ThemeMode {
+    pub const ALL: [Self; 3] = [Self::Light, Self::Dark, Self::System];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Light => "Light",
+            Self::Dark => "Dark",
+            Self::System => "System",
+        }
+    }
+
+    /// Resolves to "is dark", given what the desktop reports (if anything).
+    pub fn is_dark(self, system_is_dark: Option<bool>) -> bool {
+        match self {
+            Self::Light => false,
+            Self::Dark => true,
+            // A desktop that does not answer is far more likely to be one this
+            // app is read on at night than a bright one.
+            Self::System => system_is_dark.unwrap_or(true),
+        }
+    }
+}
+
+/// The named palettes Mihon ships with, plus a few of our own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AppTheme {
     #[default]
@@ -96,10 +121,14 @@ pub enum AppTheme {
     Tako,
     Tealturquoise,
     Yotsuba,
+    Lavender,
+    Nord,
+    TidalWave,
+    Monochrome,
 }
 
 impl AppTheme {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 11] = [
         Self::Default,
         Self::Midnight,
         Self::Green,
@@ -107,6 +136,10 @@ impl AppTheme {
         Self::Tako,
         Self::Tealturquoise,
         Self::Yotsuba,
+        Self::Lavender,
+        Self::Nord,
+        Self::TidalWave,
+        Self::Monochrome,
     ];
 
     pub fn label(self) -> &'static str {
@@ -118,6 +151,10 @@ impl AppTheme {
             Self::Tako => "Tako",
             Self::Tealturquoise => "Teal & Turquoise",
             Self::Yotsuba => "Yotsuba",
+            Self::Lavender => "Lavender",
+            Self::Nord => "Nord",
+            Self::TidalWave => "Tidal Wave",
+            Self::Monochrome => "Monochrome",
         }
     }
 
@@ -131,6 +168,89 @@ impl AppTheme {
             Self::Tako => ([0xd8, 0xac, 0x59], [0xb0, 0x8b, 0x42]),
             Self::Tealturquoise => ([0x00, 0xa8, 0xa8], [0x00, 0x86, 0x86]),
             Self::Yotsuba => ([0xf5, 0x8f, 0x3c], [0xc9, 0x71, 0x2c]),
+            Self::Lavender => ([0xc4, 0x9b, 0xf0], [0x9c, 0x74, 0xc9]),
+            Self::Nord => ([0x88, 0xc0, 0xd0], [0x5e, 0x81, 0xac]),
+            Self::TidalWave => ([0x3d, 0x9b, 0xe9], [0x2c, 0x74, 0xb3]),
+            Self::Monochrome => ([0xb4, 0xb8, 0xc2], [0x74, 0x79, 0x85]),
+        }
+    }
+}
+
+/// How tightly the interface is packed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Density {
+    Compact,
+    #[default]
+    Cozy,
+    Comfortable,
+}
+
+impl Density {
+    pub const ALL: [Self; 3] = [Self::Compact, Self::Cozy, Self::Comfortable];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Compact => "Compact",
+            Self::Cozy => "Cozy",
+            Self::Comfortable => "Comfortable",
+        }
+    }
+
+    /// Multiplies every gap, padding and margin. One value keeps the three
+    /// densities proportional instead of drifting apart control by control.
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Compact => 0.7,
+            Self::Cozy => 1.0,
+            Self::Comfortable => 1.35,
+        }
+    }
+}
+
+/// Where the primary navigation lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum NavStyle {
+    /// Icons with labels down the left edge.
+    #[default]
+    Rail,
+    /// Icons only, half the width.
+    Compact,
+    /// A phone-style bar along the bottom.
+    Bottom,
+}
+
+impl NavStyle {
+    pub const ALL: [Self; 3] = [Self::Rail, Self::Compact, Self::Bottom];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Rail => "Rail",
+            Self::Compact => "Compact",
+            Self::Bottom => "Bottom bar",
+        }
+    }
+}
+
+/// How cards and panels separate themselves from the background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CardStyle {
+    /// Fill only.
+    #[default]
+    Flat,
+    /// A hairline border, no fill difference.
+    Outlined,
+    /// Fill plus a soft drop shadow.
+    Elevated,
+}
+
+impl CardStyle {
+    pub const ALL: [Self; 3] = [Self::Flat, Self::Outlined, Self::Elevated];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Flat => "Flat",
+            Self::Outlined => "Outlined",
+            Self::Elevated => "Elevated",
         }
     }
 }
@@ -396,6 +516,29 @@ pub struct Preferences {
     pub theme_mode: ThemeMode,
     #[serde(default)]
     pub app_theme: AppTheme,
+    /// Overrides the accent of `app_theme` when set.
+    #[serde(default)]
+    pub custom_accent: Option<[u8; 3]>,
+    /// How much of the accent hue bleeds into backgrounds and surfaces.
+    #[serde(default = "default_tint")]
+    pub theme_tint: f32,
+    /// True black backgrounds, for OLED panels.
+    #[serde(default)]
+    pub pure_black: bool,
+    /// Corner rounding in points, from square to pill.
+    #[serde(default = "default_corner_radius")]
+    pub corner_radius: u8,
+    #[serde(default)]
+    pub density: Density,
+    #[serde(default)]
+    pub nav_style: NavStyle,
+    #[serde(default)]
+    pub card_style: CardStyle,
+    /// Text size relative to the rest of the interface.
+    #[serde(default = "default_ui_scale")]
+    pub font_scale: f32,
+    #[serde(default = "yes")]
+    pub animations: bool,
     #[serde(default = "yes")]
     pub relative_timestamps: bool,
     #[serde(default = "default_ui_scale")]
@@ -438,12 +581,27 @@ pub struct Preferences {
 fn default_ui_scale() -> f32 {
     1.0
 }
+fn default_tint() -> f32 {
+    0.35
+}
+fn default_corner_radius() -> u8 {
+    10
+}
 
 impl Default for Preferences {
     fn default() -> Self {
         Self {
             theme_mode: ThemeMode::default(),
             app_theme: AppTheme::default(),
+            custom_accent: None,
+            theme_tint: default_tint(),
+            pure_black: false,
+            corner_radius: default_corner_radius(),
+            density: Density::default(),
+            nav_style: NavStyle::default(),
+            card_style: CardStyle::default(),
+            font_scale: 1.0,
+            animations: true,
             relative_timestamps: true,
             ui_scale: 1.0,
             start_tab: 0,
@@ -462,6 +620,36 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    /// (accent, accent_variant) for the current theme, honouring a custom hue.
+    pub fn accent(&self) -> ([u8; 3], [u8; 3]) {
+        match self.custom_accent {
+            // A single picked colour has to yield the darker companion the
+            // palettes normally ship with, or light mode loses its contrast.
+            Some([r, g, b]) => {
+                let dim = |c: u8| (c as f32 * 0.78) as u8;
+                ([r, g, b], [dim(r), dim(g), dim(b)])
+            }
+            None => self.app_theme.accent(),
+        }
+    }
+
+    /// Restores everything under Appearance, leaving the rest untouched.
+    pub fn reset_appearance(&mut self) {
+        let fresh = Self::default();
+        self.theme_mode = fresh.theme_mode;
+        self.app_theme = fresh.app_theme;
+        self.custom_accent = fresh.custom_accent;
+        self.theme_tint = fresh.theme_tint;
+        self.pure_black = fresh.pure_black;
+        self.corner_radius = fresh.corner_radius;
+        self.density = fresh.density;
+        self.nav_style = fresh.nav_style;
+        self.card_style = fresh.card_style;
+        self.font_scale = fresh.font_scale;
+        self.animations = fresh.animations;
+        self.ui_scale = fresh.ui_scale;
+    }
+
     pub fn load(path: &Path) -> Self {
         let Ok(text) = std::fs::read_to_string(path) else {
             return Self::default();
@@ -589,6 +777,66 @@ mod tests {
         assert_eq!(loaded.ui_scale, 1.5);
         assert_eq!(loaded.library.columns, default_columns());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A file written before the appearance settings existed must keep working
+    /// and land on the same look as a fresh install, not on zeroed-out values.
+    #[test]
+    fn a_file_without_the_appearance_keys_keeps_the_defaults() {
+        let dir = temp_dir("appearance");
+        let path = dir.join("preferences.json");
+        std::fs::write(&path, r#"{"theme_mode": "Dark", "app_theme": "Tako"}"#).unwrap();
+
+        let loaded = Preferences::load(&path);
+        assert_eq!(loaded.app_theme, AppTheme::Tako);
+        assert_eq!(loaded.corner_radius, default_corner_radius());
+        assert_eq!(loaded.theme_tint, default_tint());
+        assert_eq!(loaded.density, Density::Cozy);
+        assert_eq!(loaded.nav_style, NavStyle::Rail);
+        assert_eq!(loaded.card_style, CardStyle::Flat);
+        assert_eq!(loaded.font_scale, 1.0);
+        assert!(loaded.animations);
+        assert!(loaded.custom_accent.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resetting_the_appearance_leaves_everything_else_alone() {
+        let mut prefs = Preferences {
+            app_theme: AppTheme::Nord,
+            custom_accent: Some([1, 2, 3]),
+            density: Density::Compact,
+            nav_style: NavStyle::Bottom,
+            corner_radius: 0,
+            incognito: true,
+            start_tab: 3,
+            ..Default::default()
+        };
+        prefs.library.columns = 9;
+
+        prefs.reset_appearance();
+
+        assert_eq!(prefs.app_theme, AppTheme::default());
+        assert!(prefs.custom_accent.is_none());
+        assert_eq!(prefs.density, Density::Cozy);
+        assert_eq!(prefs.nav_style, NavStyle::Rail);
+        assert_eq!(prefs.corner_radius, default_corner_radius());
+        // Untouched: these are not appearance.
+        assert!(prefs.incognito);
+        assert_eq!(prefs.start_tab, 3);
+        assert_eq!(prefs.library.columns, 9);
+    }
+
+    #[test]
+    fn a_custom_accent_takes_priority_and_yields_a_darker_companion() {
+        let prefs = Preferences {
+            app_theme: AppTheme::Green,
+            custom_accent: Some([200, 100, 50]),
+            ..Default::default()
+        };
+        let (accent, dim) = prefs.accent();
+        assert_eq!(accent, [200, 100, 50]);
+        assert!(dim.iter().zip(accent.iter()).all(|(d, a)| d < a));
     }
 
     #[test]

@@ -26,7 +26,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     // -- toolbar ------------------------------------------------------------
     egui::Panel::top("library_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 let count = app.library.entries.len();
@@ -119,7 +119,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let rows = collect_rows(app);
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             if app.library.entries.is_empty() {
                 widgets::empty_state(

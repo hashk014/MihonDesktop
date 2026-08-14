@@ -63,10 +63,32 @@ about), plus "downloaded only" and "incognito" switches.
 
 **Data** — gzipped-JSON backup and restore of the whole library and settings.
 
+## Appearance
+
+Settings → Appearance drives the whole interface from one palette, with a live
+preview so you can see a change while you are still dragging the slider.
+
+| | |
+|---|---|
+| Theme | Light, Dark, or System (follows the desktop) |
+| Accent | eleven palettes, or any colour from a picker |
+| Accent bleed | how far the accent tints backgrounds, cards and borders |
+| Pure black | true black behind everything, for OLED panels |
+| Corners | square through to pill, applied to every surface at once |
+| Cards | flat, outlined, or elevated with a drop shadow |
+| Navigation | left rail, icon-only rail, or a bottom bar |
+| Density | compact, cozy, or comfortable — every gap and padding scales |
+| Scale | window zoom and text size, independently |
+| Animations | the sliding selection indicator and hover fades |
+
 ## Sources
 
-Mihon's extensions are Android APKs containing compiled Kotlin, which a native
-desktop binary cannot load. Content therefore comes from three places:
+Mihon's extensions are compiled Kotlin, shipped as `.apk` and `.jar`. Running
+them needs a Java virtual machine and an Android API shim — that is what
+[Suwayomi](https://github.com/Suwayomi) does on the desktop and what Tachimanga
+embeds to run them on iOS. This app is a single native binary with no JVM, so
+pointing it at a Mihon/Tachiyomi repository will not work; it says so plainly
+rather than failing to parse. Content comes from four places instead:
 
 1. **MangaDex**, built in, registered once per translated language.
 2. **AnimeSama** (French), built in — a native port of the Kotlin extension.

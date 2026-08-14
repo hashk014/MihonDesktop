@@ -6,7 +6,7 @@ use super::widgets;
 use super::{App, Dialog, Route, SettingsPage};
 use crate::backup::{self, Backup};
 use crate::model::*;
-use crate::prefs::{AppTheme, ThemeMode};
+use crate::prefs::{AppTheme, CardStyle, Density, NavStyle, ThemeMode};
 
 // ---------------------------------------------------------------------------
 // The "More" tab
@@ -16,13 +16,13 @@ pub fn show_more(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
 
     egui::Panel::top("more_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             ui.label(RichText::new("More").size(20.0).strong());
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt("more_scroll")
@@ -129,13 +129,13 @@ pub fn show(app: &mut App, ui: &mut Ui, page: SettingsPage) {
     let palette = app.palette;
 
     egui::Panel::top("settings_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(app, ui, page.title(), None);
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt(("settings", page.title()))
@@ -195,11 +195,15 @@ fn appearance_page(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
     let mut changed = false;
 
+    // The preview is drawn from the *pending* preferences, so a slider being
+    // dragged is visible before the frame that installs the new style.
+    preview_card(ui, &app.prefs);
+
     section(ui, &palette, "Theme");
     ui.horizontal(|ui| {
-        for (mode, label) in [(ThemeMode::Dark, "Dark"), (ThemeMode::Light, "Light")] {
+        for mode in ThemeMode::ALL {
             if ui
-                .selectable_label(app.prefs.theme_mode == mode, label)
+                .selectable_label(app.prefs.theme_mode == mode, mode.label())
                 .clicked()
             {
                 app.prefs.theme_mode = mode;
@@ -207,29 +211,128 @@ fn appearance_page(app: &mut App, ui: &mut Ui) {
             }
         }
     });
+    ui.add_space(6.0);
+    changed |= ui
+        .checkbox(&mut app.prefs.pure_black, "Pure black backgrounds")
+        .on_hover_text("Saves power on OLED panels, and looks better in the dark")
+        .changed();
 
     section(ui, &palette, "Accent");
     ui.horizontal_wrapped(|ui| {
         for theme in AppTheme::ALL {
             let ([r, g, b], _) = theme.accent();
-            let colour = Color32::from_rgb(r, g, b);
-            let selected = app.prefs.app_theme == theme;
-
-            let (rect, response) = ui.allocate_exact_size(vec2(30.0, 30.0), egui::Sense::click());
-            ui.painter()
-                .rect_filled(rect, egui::CornerRadius::same(15), colour);
-            if selected {
-                ui.painter().rect_stroke(
-                    rect,
-                    egui::CornerRadius::same(15),
-                    egui::Stroke::new(2.5, palette.text),
-                    egui::StrokeKind::Outside,
-                );
-            }
-            if response.on_hover_text(theme.label()).clicked() {
+            let selected = app.prefs.app_theme == theme && app.prefs.custom_accent.is_none();
+            if swatch(ui, &palette, Color32::from_rgb(r, g, b), selected)
+                .on_hover_text(theme.label())
+                .clicked()
+            {
                 app.prefs.app_theme = theme;
+                app.prefs.custom_accent = None;
                 changed = true;
             }
+        }
+    });
+
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        let mut custom = app.prefs.custom_accent.unwrap_or_else(|| {
+            let ([r, g, b], _) = app.prefs.app_theme.accent();
+            [r, g, b]
+        });
+        if ui
+            .color_edit_button_srgb(&mut custom)
+            .on_hover_text("Pick any colour")
+            .changed()
+        {
+            app.prefs.custom_accent = Some(custom);
+            changed = true;
+        }
+        ui.label("Custom colour");
+        if app.prefs.custom_accent.is_some() && ui.button("Use a preset").clicked() {
+            app.prefs.custom_accent = None;
+            changed = true;
+        }
+    });
+
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.label("Accent bleed");
+        changed |= ui
+            .add(
+                egui::Slider::new(&mut app.prefs.theme_tint, 0.0..=1.0)
+                    .step_by(0.05)
+                    .show_value(false),
+            )
+            .on_hover_text("How much of the accent colour tints backgrounds and cards")
+            .changed();
+    });
+
+    section(ui, &palette, "Shape");
+    ui.horizontal(|ui| {
+        ui.label("Corners");
+        let mut radius = app.prefs.corner_radius as f32;
+        if ui
+            .add(
+                egui::Slider::new(&mut radius, 0.0..=18.0)
+                    .step_by(1.0)
+                    .show_value(false),
+            )
+            .on_hover_text("Square through to fully rounded")
+            .changed()
+        {
+            app.prefs.corner_radius = radius as u8;
+            changed = true;
+        }
+        ui.label(
+            RichText::new(match app.prefs.corner_radius {
+                0..=2 => "Square",
+                3..=8 => "Soft",
+                9..=13 => "Rounded",
+                _ => "Pill",
+            })
+            .color(palette.text_dim),
+        );
+    });
+
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.label("Cards");
+        let labels: Vec<&str> = CardStyle::ALL.iter().map(|s| s.label()).collect();
+        let current = CardStyle::ALL
+            .iter()
+            .position(|s| *s == app.prefs.card_style)
+            .unwrap_or(0);
+        if let Some(index) = widgets::segmented(ui, &palette, &labels, current) {
+            app.prefs.card_style = CardStyle::ALL[index];
+            changed = true;
+        }
+    });
+
+    section(ui, &palette, "Layout");
+    ui.horizontal(|ui| {
+        ui.label("Navigation");
+        let labels: Vec<&str> = NavStyle::ALL.iter().map(|s| s.label()).collect();
+        let current = NavStyle::ALL
+            .iter()
+            .position(|s| *s == app.prefs.nav_style)
+            .unwrap_or(0);
+        if let Some(index) = widgets::segmented(ui, &palette, &labels, current) {
+            app.prefs.nav_style = NavStyle::ALL[index];
+            changed = true;
+        }
+    });
+
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.label("Density");
+        let labels: Vec<&str> = Density::ALL.iter().map(|d| d.label()).collect();
+        let current = Density::ALL
+            .iter()
+            .position(|d| *d == app.prefs.density)
+            .unwrap_or(1);
+        if let Some(index) = widgets::segmented(ui, &palette, &labels, current) {
+            app.prefs.density = Density::ALL[index];
+            changed = true;
         }
     });
 
@@ -238,8 +341,24 @@ fn appearance_page(app: &mut App, ui: &mut Ui) {
         ui.label("Interface scale");
         changed |= ui
             .add(egui::Slider::new(&mut app.prefs.ui_scale, 0.7..=2.0).step_by(0.05))
+            .on_hover_text("Zooms the whole window, like a browser would")
             .changed();
     });
+    ui.horizontal(|ui| {
+        ui.label("Text size");
+        changed |= ui
+            .add(
+                egui::Slider::new(&mut app.prefs.font_scale, 0.8..=1.5)
+                    .step_by(0.05)
+                    .fixed_decimals(2),
+            )
+            .on_hover_text("Only the text, leaving controls where they are")
+            .changed();
+    });
+    changed |= ui
+        .checkbox(&mut app.prefs.animations, "Animations")
+        .on_hover_text("Sliding selections and fades")
+        .changed();
     changed |= ui
         .checkbox(&mut app.prefs.relative_timestamps, "Relative timestamps")
         .on_hover_text("Show “2 h ago” instead of a date")
@@ -262,9 +381,241 @@ fn appearance_page(app: &mut App, ui: &mut Ui) {
             });
     });
 
+    ui.add_space(14.0);
+    if ui.button("Reset appearance").clicked() {
+        app.prefs.reset_appearance();
+        changed = true;
+    }
+    ui.add_space(6.0);
+
     if changed {
         app.prefs_changed();
     }
+}
+
+/// A round colour chip used to pick a theme.
+fn swatch(
+    ui: &mut Ui,
+    palette: &super::theme::Palette,
+    colour: Color32,
+    selected: bool,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(30.0, 30.0), egui::Sense::click());
+    let round = egui::CornerRadius::same(15);
+    let painter = ui.painter();
+    painter.rect_filled(rect.shrink(if selected { 4.0 } else { 0.0 }), round, colour);
+    if selected {
+        painter.rect_stroke(
+            rect,
+            round,
+            egui::Stroke::new(2.0, colour),
+            egui::StrokeKind::Inside,
+        );
+    } else if response.hovered() {
+        painter.rect_stroke(
+            rect,
+            round,
+            egui::Stroke::new(2.0, palette.text.gamma_multiply(0.5)),
+            egui::StrokeKind::Outside,
+        );
+    }
+    response
+}
+
+fn shadow_shape(palette: &super::theme::Palette, rect: egui::Rect) -> egui::Shape {
+    palette.shadow().as_shape(rect, palette.corner()).into()
+}
+
+/// A miniature of the app, painted with the preferences as they stand right
+/// now rather than with the style installed at the start of the frame.
+///
+/// Without it, half of these settings — tint, density, card style — only show
+/// their effect on screens you have to navigate away from this one to see.
+fn preview_card(ui: &mut Ui, prefs: &crate::prefs::Preferences) {
+    let system_is_dark = ui
+        .ctx()
+        .system_theme()
+        .map(|theme| theme == egui::Theme::Dark);
+    let preview = super::theme::Palette::build(prefs, prefs.theme_mode.is_dark(system_is_dark));
+
+    let height = 132.0;
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), height), egui::Sense::hover());
+    let painter = ui.painter().with_clip_rect(rect);
+    painter.rect_filled(rect, preview.corner_large(), preview.background);
+    painter.rect_stroke(
+        rect,
+        preview.corner_large(),
+        egui::Stroke::new(1.0, preview.outline),
+        egui::StrokeKind::Inside,
+    );
+
+    let pad = preview.space(10.0);
+    let rail_wide = prefs.nav_style == NavStyle::Rail;
+    let rail_size = if rail_wide { 62.0 } else { 44.0 };
+
+    // The rail (or bar) with three entries, the first one selected. It is flush
+    // against two edges of the card, so only the corners it actually shares
+    // with them are rounded — rounding all four makes it float.
+    let outer = preview.corner_large().nw;
+    let (rail, body, rail_corner) = if prefs.nav_style == NavStyle::Bottom {
+        let split = rect.bottom() - 34.0;
+        (
+            egui::Rect::from_min_max(egui::pos2(rect.left(), split), rect.max),
+            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right(), split)),
+            egui::CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: outer,
+                se: outer,
+            },
+        )
+    } else {
+        let split = rect.left() + rail_size;
+        (
+            egui::Rect::from_min_max(rect.min, egui::pos2(split, rect.bottom())),
+            egui::Rect::from_min_max(egui::pos2(split, rect.top()), rect.max),
+            egui::CornerRadius {
+                nw: outer,
+                sw: outer,
+                ne: 0,
+                se: 0,
+            },
+        )
+    };
+    painter.rect_filled(rail, rail_corner, preview.surface);
+
+    let glyphs = ["📚", "🔄", "🕘"];
+    for (index, glyph) in glyphs.iter().enumerate() {
+        let slot = if prefs.nav_style == NavStyle::Bottom {
+            let width = rail.width() / glyphs.len() as f32;
+            egui::Rect::from_min_size(
+                egui::pos2(rail.left() + width * index as f32, rail.top()),
+                vec2(width, rail.height()),
+            )
+        } else {
+            let step = 34.0;
+            egui::Rect::from_min_size(
+                egui::pos2(rail.left(), rail.top() + pad + step * index as f32),
+                vec2(rail.width(), step),
+            )
+        };
+        if index == 0 {
+            painter.rect_filled(
+                slot.shrink(3.0),
+                preview.corner(),
+                preview.accent.gamma_multiply(0.22),
+            );
+        }
+        painter.text(
+            slot.center(),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            egui::FontId::proportional(13.0),
+            if index == 0 {
+                preview.accent
+            } else {
+                preview.text_dim
+            },
+        );
+    }
+
+    // A card holding a cover placeholder, two lines of text and a badge.
+    let card = egui::Rect::from_min_max(
+        egui::pos2(body.left() + pad, body.top() + pad),
+        egui::pos2(body.right() - pad, body.top() + pad + 62.0),
+    );
+    match prefs.card_style {
+        CardStyle::Outlined => {
+            painter.rect_stroke(
+                card,
+                preview.corner(),
+                egui::Stroke::new(1.0, preview.outline),
+                egui::StrokeKind::Inside,
+            );
+        }
+        CardStyle::Elevated => {
+            painter.add(shadow_shape(&preview, card));
+            painter.rect_filled(card, preview.corner(), preview.surface);
+        }
+        CardStyle::Flat => {
+            painter.rect_filled(card, preview.corner(), preview.surface);
+        }
+    }
+
+    let cover = egui::Rect::from_min_size(
+        egui::pos2(card.left() + 8.0, card.top() + 8.0),
+        vec2(30.0, 46.0),
+    );
+    painter.rect_filled(cover, preview.corner_small(), preview.surface_alt);
+    painter.text(
+        cover.center(),
+        egui::Align2::CENTER_CENTER,
+        "MD",
+        egui::FontId::proportional(11.0 * prefs.font_scale),
+        preview.text_dim,
+    );
+
+    let text_left = cover.right() + 8.0;
+    painter.text(
+        egui::pos2(text_left, card.top() + 12.0),
+        egui::Align2::LEFT_CENTER,
+        "Chapter 41",
+        egui::FontId::proportional(13.0 * prefs.font_scale),
+        preview.text,
+    );
+    painter.text(
+        egui::pos2(text_left, card.top() + 28.0),
+        egui::Align2::LEFT_CENTER,
+        "2 h ago · MangaDex",
+        egui::FontId::proportional(10.5 * prefs.font_scale),
+        preview.text_dim,
+    );
+
+    // The accent, as a filled button and as a badge.
+    let button = egui::Rect::from_min_size(
+        egui::pos2(text_left, card.bottom() - 22.0),
+        vec2(58.0, 17.0),
+    );
+    painter.rect_filled(button, preview.corner_small(), preview.accent);
+    painter.text(
+        button.center(),
+        egui::Align2::CENTER_CENTER,
+        "Read",
+        egui::FontId::proportional(10.5 * prefs.font_scale),
+        preview.on_accent,
+    );
+    let badge = egui::Rect::from_min_size(
+        egui::pos2(card.right() - 34.0, card.top() + 8.0),
+        vec2(26.0, 15.0),
+    );
+    painter.rect_filled(badge, preview.corner_small(), preview.accent);
+    painter.text(
+        badge.center(),
+        egui::Align2::CENTER_CENTER,
+        "12",
+        egui::FontId::proportional(9.5 * prefs.font_scale),
+        preview.on_accent,
+    );
+
+    // A strip of library tiles below, so grid spacing reacts to density too.
+    // Capped at eight: beyond that they are too narrow to read as covers.
+    let gap = preview.space(8.0);
+    let tiles_top = card.bottom() + gap;
+    let tile_height = (body.bottom() - pad - tiles_top).max(0.0);
+    if tile_height > 12.0 {
+        let tile_width = tile_height / widgets::COVER_ASPECT;
+        let fit = ((card.width() + gap) / (tile_width + gap)).floor().max(0.0) as usize;
+        for index in 0..fit.min(8) {
+            let tile = egui::Rect::from_min_size(
+                egui::pos2(card.left() + (tile_width + gap) * index as f32, tiles_top),
+                vec2(tile_width, tile_height),
+            );
+            painter.rect_filled(tile, preview.corner(), preview.surface_alt);
+        }
+    }
+
+    ui.add_space(4.0);
 }
 
 fn library_page(app: &mut App, ui: &mut Ui) {
@@ -811,7 +1162,7 @@ pub fn show_statistics(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
 
     egui::Panel::top("stats_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(app, ui, "Statistics", None);
         });
@@ -835,7 +1186,7 @@ pub fn show_statistics(app: &mut App, ui: &mut Ui) {
         .sum();
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt("stats_scroll")

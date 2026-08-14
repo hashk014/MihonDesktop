@@ -10,7 +10,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let palette = app.palette;
 
     egui::Panel::top("categories_top")
-        .frame(super::theme::plain(14))
+        .frame(super::theme::header_frame(&app.palette))
         .show(ui, |ui| {
             widgets::screen_header(
                 app,
@@ -29,7 +29,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let categories = app.core.db.categories();
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 6)))
+        .frame(super::theme::body_frame(&app.palette))
         .show(ui, |ui| {
             if categories.iter().all(|c| c.is_system()) {
                 widgets::empty_state(

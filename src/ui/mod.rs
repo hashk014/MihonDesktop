@@ -30,7 +30,7 @@ use crate::core::{BrowseMode, Core};
 use crate::event::{AppEvent, EventBus, Toast, ToastKind};
 use crate::images::{ImageKind, ImageSlot, TextureCache};
 use crate::model::*;
-use crate::prefs::{AppPaths, Preferences};
+use crate::prefs::{AppPaths, NavStyle, Preferences};
 use crate::source::ext::{InstalledExtension, RepoEntry};
 use crate::source::{FilterList, MangasPage, Page, SManga};
 use theme::Palette;
@@ -400,7 +400,8 @@ pub struct App {
 
 impl App {
     pub fn new(paths: AppPaths, prefs: Preferences, bus: EventBus, core: Core) -> Self {
-        let palette = Palette::from_prefs(&prefs);
+        // Replaced on the first frame, once egui can report the desktop theme.
+        let palette = Palette::build(&prefs, prefs.theme_mode.is_dark(None));
         let _ = paths;
         let tab = Tab::from_index(prefs.start_tab);
 
@@ -1010,7 +1011,7 @@ impl App {
             area.show(ui.ctx(), |ui| {
                 egui::Frame::NONE
                     .fill(fill.gamma_multiply(fade))
-                    .corner_radius(egui::CornerRadius::same(theme::RADIUS))
+                    .corner_radius(palette.corner())
                     .inner_margin(egui::Margin::symmetric(14, 10))
                     .show(ui, |ui| {
                         ui.set_max_width(520.0);
@@ -1023,35 +1024,79 @@ impl App {
         }
     }
 
-    fn draw_nav_rail(&mut self, ui: &mut egui::Ui) {
+    fn draw_navigation(&mut self, ui: &mut egui::Ui) {
+        match self.prefs.nav_style {
+            NavStyle::Rail => self.draw_nav_rail(ui, true),
+            NavStyle::Compact => self.draw_nav_rail(ui, false),
+            NavStyle::Bottom => self.draw_nav_bar(ui),
+        }
+    }
+
+    fn draw_nav_rail(&mut self, ui: &mut egui::Ui, labelled: bool) {
         let palette = self.palette;
+        let width = if labelled {
+            palette.space(92.0)
+        } else {
+            palette.space(64.0)
+        };
+        let item_style = if labelled {
+            widgets::NavItemStyle::Full
+        } else {
+            widgets::NavItemStyle::IconOnly
+        };
+        let item_height = palette.space(if labelled { 52.0 } else { 44.0 });
+
         egui::Panel::left("nav_rail")
-            .exact_size(92.0)
+            .exact_size(width)
             .resizable(false)
             .frame(
                 egui::Frame::NONE
                     .fill(palette.surface)
-                    .inner_margin(egui::Margin::symmetric(6, 14)),
+                    .inner_margin(egui::Margin::symmetric(
+                        palette.margin(6.0),
+                        palette.margin(14.0),
+                    )),
             )
             .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(2.0);
                     ui.label(
-                        RichText::new("mihon")
+                        RichText::new(if labelled { "mihon" } else { "◆" })
                             .size(15.0)
                             .strong()
                             .color(palette.accent),
                     );
-                    ui.add_space(14.0);
+                    ui.add_space(palette.space(14.0));
                 });
+
+                // Reserved now, filled once the selected entry has a rectangle.
+                let indicator = ui.painter().add(egui::Shape::Noop);
+                let mut selected_rect = None;
 
                 for tab in Tab::ALL {
                     let selected = self.tab == tab && self.stack.is_empty();
-                    if widgets::nav_item(ui, &palette, tab.glyph(), tab.label(), selected).clicked()
-                    {
+                    let response = widgets::nav_item(
+                        ui,
+                        &palette,
+                        tab.glyph(),
+                        tab.label(),
+                        selected,
+                        item_style,
+                        egui::vec2(ui.available_width(), item_height),
+                    );
+                    if selected {
+                        selected_rect = Some(response.rect.shrink2(egui::vec2(4.0, 2.0)));
+                    }
+                    if response.clicked() {
                         self.tab = tab;
                         self.stack.clear();
                     }
+                }
+
+                if let Some(rect) = selected_rect {
+                    let shape =
+                        widgets::nav_indicator_shape(ui, &palette, rect, self.prefs.animations);
+                    ui.painter().set(indicator, shape);
                 }
 
                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
@@ -1062,22 +1107,116 @@ impl App {
                     } else {
                         "📥".to_string()
                     };
-                    if widgets::nav_item(ui, &palette, &label, "Downloads", false).clicked() {
+                    if widgets::nav_item(
+                        ui,
+                        &palette,
+                        &label,
+                        "Downloads",
+                        false,
+                        item_style,
+                        egui::vec2(ui.available_width(), item_height),
+                    )
+                    .clicked()
+                    {
                         self.push(Route::Downloads);
                     }
                     if let Some((done, total, _)) = &self.update_progress {
                         ui.add_space(4.0);
-                        ui.label(
-                            RichText::new(format!("{done}/{total}"))
-                                .size(10.5)
-                                .color(palette.text_dim),
-                        );
+                        if labelled {
+                            ui.label(
+                                RichText::new(format!("{done}/{total}"))
+                                    .size(10.5)
+                                    .color(palette.text_dim),
+                            );
+                        }
                         ui.add(
                             egui::ProgressBar::new(*done as f32 / *total as f32)
                                 .desired_height(4.0),
                         );
                     }
                 });
+            });
+    }
+
+    fn draw_nav_bar(&mut self, ui: &mut egui::Ui) {
+        let palette = self.palette;
+        let height = palette.space(58.0);
+        egui::Panel::bottom("nav_bar")
+            .exact_size(height)
+            .resizable(false)
+            .frame(
+                egui::Frame::NONE
+                    .fill(palette.surface)
+                    .inner_margin(egui::Margin::symmetric(
+                        palette.margin(8.0),
+                        palette.margin(5.0),
+                    )),
+            )
+            .show(ui, |ui| {
+                if let Some((done, total, _)) = &self.update_progress {
+                    ui.add(
+                        egui::ProgressBar::new(*done as f32 / *total as f32).desired_height(3.0),
+                    );
+                }
+
+                let indicator = ui.painter().add(egui::Shape::Noop);
+                let mut selected_rect = None;
+
+                // Six equal slots: the five tabs plus the download queue. The
+                // width is worked out here and handed to each entry, because an
+                // entry sizing itself from `available_width` inside a horizontal
+                // layout would swallow the whole row.
+                let spacing = ui.spacing().item_spacing.x;
+                let slot = ((ui.available_width() - spacing * 5.0) / 6.0).max(24.0);
+                let size = egui::vec2(slot, ui.available_height());
+
+                ui.horizontal(|ui| {
+                    for tab in Tab::ALL {
+                        let selected = self.tab == tab && self.stack.is_empty();
+                        let response = widgets::nav_item(
+                            ui,
+                            &palette,
+                            tab.glyph(),
+                            tab.label(),
+                            selected,
+                            widgets::NavItemStyle::Horizontal,
+                            size,
+                        );
+                        if selected {
+                            selected_rect = Some(response.rect.shrink2(egui::vec2(2.0, 2.0)));
+                        }
+                        if response.clicked() {
+                            self.tab = tab;
+                            self.stack.clear();
+                        }
+                    }
+
+                    let queued = self.core.downloads.queue_len();
+                    let label = if queued > 0 {
+                        format!("📥 {queued}")
+                    } else {
+                        "📥".to_string()
+                    };
+                    if widgets::nav_item(
+                        ui,
+                        &palette,
+                        &label,
+                        "Downloads",
+                        false,
+                        widgets::NavItemStyle::Horizontal,
+                        size,
+                    )
+                    .clicked()
+                    {
+                        self.push(Route::Downloads);
+                    }
+                });
+
+                if let Some(rect) = selected_rect {
+                    let shape =
+                        widgets::nav_indicator_shape(ui, &palette, rect, self.prefs.animations);
+                    ui.painter().set(indicator, shape);
+                }
             });
     }
 
@@ -1131,7 +1270,7 @@ impl eframe::App for App {
         // The reader takes the whole window; everything else keeps the rail.
         let fullscreen = matches!(self.current_route(), Some(Route::Reader { .. }));
         if !fullscreen {
-            self.draw_nav_rail(ui);
+            self.draw_navigation(ui);
         }
 
         let palette = self.palette;
