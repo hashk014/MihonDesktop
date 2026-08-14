@@ -1,0 +1,44 @@
+name: Source request
+description: Ask for a site to be supported, or report a broken source.
+labels: [source]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Most sites can be described with a JSON manifest and need no Rust — see
+        CONTRIBUTING.md. If you can write one, a pull request is very welcome.
+
+  - type: input
+    id: site
+    attributes:
+      label: Site
+      placeholder: https://example.com
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: fr
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is this about
+      options:
+        - A site that is not supported yet
+        - A supported source that stopped working
+        - A supported source returning wrong data (missing chapters, wrong order)
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: >
+        For a broken source, say what you see and what you expected — for
+        example "the chapter list stops at 107 but the site shows 186".

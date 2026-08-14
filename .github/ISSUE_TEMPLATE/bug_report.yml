@@ -1,0 +1,45 @@
+name: Bug report
+description: Something behaves wrongly, freezes, or crashes.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I clicked the trash icon on a downloaded chapter and the reader opened
+        instead of deleting it.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → About, or the release you downloaded.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source and series
+      description: Which source, and which series if it is specific to one.
+      placeholder: AnimeSama — I Obtained a Mythic Item
+
+  - type: textarea
+    id: crashlog
+    attributes:
+      label: crash.log
+      description: >
+        If the window disappeared, the app writes a crash.log into its data
+        directory (the path is listed in Settings → About). Paste it here.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots help, especially for rendering problems.
